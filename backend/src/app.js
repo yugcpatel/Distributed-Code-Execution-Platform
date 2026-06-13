@@ -1,17 +1,13 @@
-const express = require('express');
-const cors = require('cors');
-const executionRoutes = require('./routes/executionRoutes');
+import express from "express";
+import cors from "cors";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api', executionRoutes);
-
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Execution server is running.' });
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
 });
 
-module.exports = app;
+export default app;
