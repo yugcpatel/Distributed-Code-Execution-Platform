@@ -1,16 +1,38 @@
-// Execution Controller Placeholder
-// Handles receiving code run requests and invoking executor service
+// Import our utility functions for creating and deleting temporary files
+import { createTempFile, deleteTempFile } from '../utils/tempFileManager.js';
+// Import the service that actually runs the code
+import { executeCode } from '../services/codeExecutor.js';
 
-const runCode = async (req, res) => {
-  try {
-    const { code, language } = req.body;
-    // TODO: Implement execution handling logic
-    res.status(200).json({ message: 'Run request received (placeholder)' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+// This is the controller function for our POST /api/execute route
+// It receives the request (req) from the frontend and sends back a response (res)
+export const runCode = async (req, res) => {
+  // Extract the 'code' and 'language' values from the request body
+  const { code, language } = req.body;
+  
+  // Validate the payload: if either is missing, return a 400 Bad Request error
+  if (!code || !language) {
+    return res.status(400).json({ error: 'Payload must include "code" and "language".' });
   }
-};
 
-module.exports = {
-  runCode
+  // We declare filePath outside the try block so we can access it in the finally block for cleanup
+  let filePath;
+  try {
+    // Step 1: Save the user's code to a temporary file on the server's hard drive
+    filePath = await createTempFile(code, language);
+
+    // Step 2: Execute the temporary file in a separate child process and wait for the output
+    const output = await executeCode(filePath, language);
+
+    // Step 3: Send a successful 200 OK response back to the frontend containing the output
+    res.status(200).json({ output });
+  } catch (error) {
+    // If anything goes wrong (like a server error), catch it and send a 500 error response
+    res.status(500).json({ error: error.message });
+  } finally {
+    // The 'finally' block always runs, whether the try succeeded or threw an error
+    // Step 4: Clean up by deleting the temporary file so we don't clutter the server's disk
+    if (filePath) {
+      await deleteTempFile(filePath);
+    }
+  }
 };
