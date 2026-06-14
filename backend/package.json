@@ -1,7 +1,7 @@
 {
   "name": "distributed-code-runner-backend",
   "version": "1.0.0",
-  "description": "Backend execution service for distributed code runner",
+  "description": "Backend execution service for SandBox",
   "main": "src/server.js",
   "type": "module",
   "scripts": {

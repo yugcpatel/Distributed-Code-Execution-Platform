@@ -1,24 +1,25 @@
-// API Service for triggering code executions
+// Import axios, which is a popular library to make HTTP requests
+import axios from 'axios';
 
+// This is the base URL for our backend server
 const API_BASE_URL = 'http://localhost:5000/api';
 
+// We export an async function that sends the code to the backend
 export const executeCode = async (code, language) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code, language }),
+    // We use axios.post to send a POST request to the /execute route
+    // The second argument is the data we want to send: the code and its language
+    const response = await axios.post(`${API_BASE_URL}/execute`, {
+      code,
+      language
     });
-
-    if (!response.ok) {
-      throw new Error(`Execution request failed with status: ${response.status}`);
-    }
-
-    return await response.json();
+    
+    // axios automatically parses the JSON response, so we just return response.data
+    return response.data;
   } catch (error) {
+    // If there is an error (like server is down), we print it to the console
     console.error('API execution error:', error);
+    // And we throw the error so the caller can handle it and show it to the user
     throw error;
   }
 };

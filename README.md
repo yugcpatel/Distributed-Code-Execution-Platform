@@ -1,4 +1,4 @@
-# Distributed Code Runner
+# SandBox
 
 This project consists of:
 - A React-based Frontend built with Vite.
