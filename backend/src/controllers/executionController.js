@@ -18,13 +18,22 @@ export const runCode = async (req, res) => {
   let filePath;
   try {
     // Step 1: Save the user's code to a temporary file on the server's hard drive
-    filePath = await createTempFile(code, language);
+    // createTempFile now returns an object with richer metadata
+    const tempFileMeta = await createTempFile(code, language);
+    filePath = tempFileMeta.filePath;
+    const { jobId, createdAt } = tempFileMeta;
 
     // Step 2: Execute the temporary file in a separate child process and wait for the output
-    const output = await executeCode(filePath, language);
+    // executeCode now returns both the output string and the executionTime
+    const { output, executionTime } = await executeCode(filePath, language);
 
-    // Step 3: Send a successful 200 OK response back to the frontend containing the output
-    res.status(200).json({ output });
+    // Step 3: Send a successful 200 OK response back to the frontend containing all metadata
+    res.status(200).json({ 
+      output, 
+      executionTime, 
+      jobId, 
+      createdAt 
+    });
   } catch (error) {
     // If anything goes wrong (like a server error), catch it and send a 500 error response
     res.status(500).json({ error: error.message });

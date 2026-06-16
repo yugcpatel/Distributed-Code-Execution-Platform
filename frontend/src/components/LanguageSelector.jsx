@@ -9,7 +9,7 @@ function LanguageSelector({ language, onChange }) {
 
   // We return a dropdown (<select>) element
   return (
-    <div className="language-selector" style={{ marginBottom: '10px' }}>
+    <div className="language-selector">
       {/* 
         The select's value is tied to our 'language' state.
         When a user selects a new option, the onChange event fires 
@@ -18,7 +18,16 @@ function LanguageSelector({ language, onChange }) {
       <select 
         value={language} 
         onChange={(e) => onChange(e.target.value)}
-        style={{ padding: '8px', borderRadius: '4px', background: '#1f2633', color: 'white', border: '1px solid #2e3748' }}
+        style={{ 
+          padding: '6px 12px', 
+          borderRadius: '6px', 
+          background: 'var(--bg-tertiary)', 
+          color: 'var(--text-primary)', 
+          border: '1px solid var(--border-color)',
+          cursor: 'pointer',
+          outline: 'none',
+          fontSize: '14px'
+        }}
       >
         {/* We map over our languages array to create an <option> element for each one */}
         {languages.map((lang) => (

@@ -27,3 +27,6 @@ yarn-error.log*
 
 # Temporary execution files
 backend/temp/
+
+# walkthourgh 
+walkthourgh.md

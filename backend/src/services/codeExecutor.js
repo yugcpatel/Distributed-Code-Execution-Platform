@@ -21,17 +21,30 @@ export const executeCode = async (filePath, language) => {
     throw new Error(`Unsupported language: ${language}`);
   }
 
+  // Record the exact time before we start the execution
+  const startTime = Date.now();
+
   try {
     // Execute the shell command
-    // We pass a { timeout: 5000 } option to kill the process if it takes longer than 5 seconds (e.g., an infinite loop)
+    // We pass a { timeout: 5000 } option to kill the process if it takes longer than 5 seconds
     const { stdout, stderr } = await execAsync(command, { timeout: 5000 });
     
-    // If the execution is successful, return the standard output (stdout).
-    // If there is standard error (stderr) but it didn't cause the program to crash, append it too.
-    return stdout + (stderr ? `\nErrors:\n${stderr}` : '');
+    // Calculate how long it took
+    const executionTime = Date.now() - startTime;
+
+    // Combine standard output and any non-crashing standard error
+    const output = stdout + (stderr ? `\nErrors:\n${stderr}` : '');
+    
+    // Return both the output string and the execution metadata
+    return { output, executionTime };
   } catch (error) {
-    // If the execution crashes (like a syntax error or a timeout), it throws an error
-    // We catch it and return the error details so the user can see what went wrong in their code
-    return error.stderr || error.message || 'Execution failed with an unknown error.';
+    // Calculate how long it took before crashing
+    const executionTime = Date.now() - startTime;
+    
+    // Extract the error message
+    const output = error.stderr || error.message || 'Execution failed with an unknown error.';
+    
+    // Even if it failed, return the output and the time it took to fail
+    return { output, executionTime };
   }
 };
