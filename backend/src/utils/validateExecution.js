@@ -1,4 +1,5 @@
 import AppError from './AppError.js';
+import { EXECUTION } from '../config/constants.js';
 
 // This utility function pulls validation logic out of the controller to keep it clean.
 export const validateExecution = (code, language) => {
@@ -10,14 +11,13 @@ export const validateExecution = (code, language) => {
     throw new AppError('Payload must include "language".', 400);
   }
 
-  // Define supported languages
-  const supportedLanguages = ['python', 'javascript'];
-  if (!supportedLanguages.includes(language)) {
-    throw new AppError(`Unsupported language: ${language}. Supported languages are: ${supportedLanguages.join(', ')}`, 400);
+  // Define supported languages from config
+  if (!EXECUTION.ALLOWED_LANGUAGES.includes(language)) {
+    throw new AppError(`Unsupported language: ${language}. Supported languages are: ${EXECUTION.ALLOWED_LANGUAGES.join(', ')}`, 400);
   }
 
   // Security check: Reject massive payloads to protect the server
-  if (code.length > 10000) {
-    throw new AppError('Code size exceeds the maximum allowed limit of 10,000 characters.', 400);
+  if (code.length > EXECUTION.MAX_CODE_SIZE) {
+    throw new AppError(`Code size exceeds the maximum allowed limit of ${EXECUTION.MAX_CODE_SIZE} characters.`, 400);
   }
 };

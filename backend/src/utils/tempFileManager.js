@@ -65,3 +65,31 @@ export const deleteTempFile = async (filePath) => {
     console.error(`Failed to delete temp file ${filePath}:`, err);
   }
 };
+
+// This function creates a permanent log of the execution
+export const createExecutionLog = async (jobId, logData) => {
+  const logFileName = `${jobId}.log`;
+  const logFilePath = path.join(tempLogsDir, logFileName);
+  
+  // Format the log nicely
+  const logContent = `
+====================================
+JOB ID: ${jobId}
+TIMESTAMP: ${new Date().toISOString()}
+STATUS: ${logData.status}
+EXECUTION TIME: ${logData.executionTime || 0}ms
+====================================
+CODE:
+${logData.code}
+====================================
+OUTPUT:
+${logData.output}
+====================================
+  `.trim() + '\n';
+
+  try {
+    await fsAsync.writeFile(logFilePath, logContent);
+  } catch (err) {
+    console.error(`Failed to write execution log for job ${jobId}:`, err);
+  }
+};

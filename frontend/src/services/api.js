@@ -14,8 +14,9 @@ export const executeCode = async (code, language) => {
       language
     });
     
-    // axios automatically parses the JSON response, so we just return response.data
-    return response.data;
+    // The backend now wraps successful responses in { success: true, data: { ... } }
+    // We return response.data.data to give the components exactly what they need
+    return response.data.data;
   } catch (error) {
     // If there is an error (like server is down), we print it to the console
     console.error('API execution error:', error);

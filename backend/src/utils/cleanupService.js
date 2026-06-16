@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CLEANUP } from '../config/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,7 +18,6 @@ export const cleanupOldFiles = () => {
     // Read all files in the directory
     const files = fs.readdirSync(tempJobsDir);
     const now = Date.now();
-    const FIVE_MINUTES = 5 * 60 * 1000;
 
     files.forEach((file) => {
       const filePath = path.join(tempJobsDir, file);
@@ -25,8 +25,8 @@ export const cleanupOldFiles = () => {
       try {
         const stats = fs.statSync(filePath);
 
-        // Check if the file is older than 5 minutes
-        if (now - stats.birthtimeMs > FIVE_MINUTES) {
+        // Check if the file is older than the configured max age
+        if (now - stats.birthtimeMs > CLEANUP.MAX_FILE_AGE_MS) {
           fs.unlinkSync(filePath);
           console.log(`Cleaned up stale file: ${file}`);
         }
