@@ -27,6 +27,11 @@ export const dockerExecuteCode = (filePath, language) => {
     const args = [
       "run",
       "--rm", // Auto-delete the container when the execution finishes (cleanup).
+      "--cpus=0.5", // Limit CPU usage to 50% of a single core
+      "--memory=128m", // Limit memory usage to 128MB to prevent OOM attacks
+      "--network=none", // Disable all network access (no internet for user code)
+      "--read-only", // Make the filesystem read-only to prevent malicious writes
+      "--tmpfs", "/tmp", // Provide a temporary, in-memory /tmp folder for Python to use. It is destroyed automatically when the container stops.
       "-v", // Volume mount flag
       `${absoluteFilePath}:/app/code.py`, // Map our Windows host file to the container's /app/code.py
       "code-runner-python", // The name of the Docker image to run
