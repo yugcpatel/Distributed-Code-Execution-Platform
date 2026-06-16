@@ -2,6 +2,8 @@
 import { exec } from 'child_process';
 // Import the util module to convert callback-based functions into Promise-based ones
 import util from 'util';
+// Import our custom AppError to handle execution failures gracefully
+import AppError from '../utils/AppError.js';
 
 // Promisify the 'exec' function so we can use async/await syntax with it instead of callbacks
 const execAsync = util.promisify(exec);
@@ -17,8 +19,8 @@ export const executeCode = async (filePath, language) => {
     // For JavaScript, we run: node "path/to/file.js"
     command = `node "${filePath}"`;
   } else {
-    // If the language isn't supported, throw an error
-    throw new Error(`Unsupported language: ${language}`);
+    // If the language isn't supported, throw a structured 400 error
+    throw new AppError(`Unsupported language: ${language}`, 400);
   }
 
   // Record the exact time before we start the execution
@@ -32,19 +34,24 @@ export const executeCode = async (filePath, language) => {
     // Calculate how long it took
     const executionTime = Date.now() - startTime;
 
-    // Combine standard output and any non-crashing standard error
-    const output = stdout + (stderr ? `\nErrors:\n${stderr}` : '');
+    // Distinguish: bad code ≠ server failure. 
+    // If the script outputs to stderr but exits 0, we still treat it as a code error (e.g. warnings)
+    if (stderr) {
+      throw new AppError(stderr, 400);
+    }
     
     // Return both the output string and the execution metadata
-    return { output, executionTime };
+    return { output: stdout, executionTime };
   } catch (error) {
-    // Calculate how long it took before crashing
-    const executionTime = Date.now() - startTime;
+    // If the error is already an AppError (from our stderr check above), re-throw it
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    // A timeout or syntax error usually surfaces in error.stderr or error.message
+    const errorMsg = error.stderr || (error.killed ? 'Execution timed out after 5 seconds' : error.message);
     
-    // Extract the error message
-    const output = error.stderr || error.message || 'Execution failed with an unknown error.';
-    
-    // Even if it failed, return the output and the time it took to fail
-    return { output, executionTime };
+    // Throw a 400 error indicating the user's code failed
+    throw new AppError(errorMsg || 'Execution failed with an unknown error.', 400);
   }
 };
