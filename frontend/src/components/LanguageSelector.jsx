@@ -5,7 +5,7 @@ import React from 'react';
 // It takes 'language' (the currently selected language) and 'onChange' (function to run when user changes selection)
 function LanguageSelector({ language, onChange }) {
   // We define an array of the programming languages we support
-  const languages = ['javascript', 'python'];
+  const languages = ['python'];
 
   // We return a dropdown (<select>) element
   return (

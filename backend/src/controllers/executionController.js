@@ -1,7 +1,7 @@
 // Import our utility functions for creating and deleting temporary files, and logging
 import { createTempFile, deleteTempFile, createExecutionLog } from '../utils/tempFileManager.js';
-// Import the service that actually runs the code
-import { executeCode } from '../services/execution/pythonExecutor.js';
+// Import the service that actually runs the code securely via Docker
+import { dockerExecuteCode } from '../services/execution/dockerExecutor.js';
 // Import our new validation utility
 import { validateExecution } from '../utils/validateExecution.js';
 
@@ -27,9 +27,9 @@ export const runCode = async (req, res, next) => {
 
     console.log(`[Job ${jobId}] Job started`);
 
-    // Step 2: Execute the temporary file in a separate child process and wait for the output
-    // executeCode now returns both the output string and the executionTime
-    const { output, executionTime } = await executeCode(filePath, language);
+    // Step 2: Execute the temporary file in an isolated Docker container and wait for the output
+    // dockerExecuteCode now returns both the output string and the executionTime
+    const { output, executionTime } = await dockerExecuteCode(filePath, language);
 
     console.log(`[Job ${jobId}] Job completed in ${executionTime}ms`);
 

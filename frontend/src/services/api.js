@@ -20,7 +20,13 @@ export const executeCode = async (code, language) => {
   } catch (error) {
     // If there is an error (like server is down), we print it to the console
     console.error('API execution error:', error);
-    // And we throw the error so the caller can handle it and show it to the user
+    
+    // Extract the exact error message sent by our backend (e.g., SyntaxError or Unsupported language)
+    if (error.response && error.response.data && error.response.data.message) {
+      throw new Error(error.response.data.message);
+    }
+    
+    // Otherwise throw the original error (e.g., Network Error)
     throw error;
   }
 };

@@ -21,8 +21,8 @@ const DEFAULT_CODE = {
 };
 
 function Home() {
-  const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState(DEFAULT_CODE['javascript']);
+  const [language, setLanguage] = useState('python');
+  const [code, setCode] = useState(DEFAULT_CODE['python']);
   const [output, setOutput] = useState('');
   const [executionTime, setExecutionTime] = useState(null);
   const [loading, setLoading] = useState(false);
