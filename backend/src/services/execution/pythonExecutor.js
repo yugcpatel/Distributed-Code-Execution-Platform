@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 // Import the util module to convert callback-based functions into Promise-based ones
 import util from 'util';
 // Import our custom AppError to handle execution failures gracefully
-import AppError from '../utils/AppError.js';
+import AppError from '../../utils/AppError.js';
 
 // Promisify the 'exec' function so we can use async/await syntax with it instead of callbacks
 const execAsync = util.promisify(exec);
