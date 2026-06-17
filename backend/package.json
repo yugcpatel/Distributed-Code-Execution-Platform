@@ -9,11 +9,13 @@
     "dev": "nodemon src/server.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.4.1",
     "bullmq": "^5.78.1",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
     "ioredis": "^5.11.1",
+    "prisma": "^6.4.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
