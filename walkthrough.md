@@ -1,40 +1,188 @@
-# Day 5 — Robust File Lifecycle Management
+# Distributed Code Execution Platform: The Definitive Engineering Journey (Days 1–16)
 
-Your code execution engine just graduated to a production-grade system! We have successfully rebuilt the entire temporary file lifecycle. Here is exactly what I built and how it functions.
+Welcome to the comprehensive, deep-dive technical walkthrough of the Distributed Code Execution Platform. What began as a simple React frontend and an Express backend has evolved into a highly scalable, fault-tolerant, secure distributed system utilizing Docker, Redis, and PostgreSQL.
 
-## Architectural Changes
+This document breaks down the exact architectural decisions, code patterns, and security implementations that turned a naive prototype into an enterprise-ready architecture.
 
-### 1. Folder Structure & Automatic Initialization
-Instead of dumping everything into a chaotic `temp/` folder, user jobs are now isolated:
-- `backend/temp/jobs/` (stores active code)
-- `backend/temp/logs/` (ready for future logging)
+---
 
-I added an `ensureDirectoriesExist` routine to `server.js` that runs synchronously at boot. This guarantees that your server will never crash due to a missing folder; it will safely reconstruct the directories automatically on startup.
+## Phase 1: The Monorepo Foundation & Communication (Days 1–3)
 
-### 2. Execution Metadata & Performance Tracking
-Your backend now natively calculates how fast the user's code ran.
-When `codeExecutor.js` is triggered, we track `Date.now()` at the start and end of the execution (whether it succeeds or crashes). 
+### The Goal
+Establish the core structure. A code execution platform requires two distinct entities: a user interface capable of writing raw code strings, and a server capable of receiving them securely.
 
-The backend API response format changed from returning a simple string, to a rich JSON payload:
+### The Implementation
+We initialized a strict monorepo containing two sub-projects:
+- **`frontend/`**: A React Single Page Application powered by Vite. We built a beautiful, modern UI using CSS variables (`data-theme`) to allow for dynamic dark/light mode toggling. The editor uses a controlled textarea to capture raw code strings.
+- **`backend/`**: A Node.js and Express.js server acting as our API gateway.
+
+### The Challenge: CORS
+By default, browsers block the React app (running on `localhost:5173`) from speaking to the Express API (running on `localhost:5000`). We solved this by implementing the `cors` middleware in our Express `app.js`.
+
+### The Core Endpoint
+We established `POST /api/execute` which accepts a JSON payload containing `{ language: "python", code: "print('Hello')" }`.
+
+---
+
+## Phase 2: The Local Execution Engine (Days 4–5)
+
+### The Goal
+Execute the submitted code and return the result.
+
+### The Implementation
+Initially, we relied on the host machine's native Python installation. We built `tempFileManager.js` to create highly randomized temporary files (`uuid.py`) on the hard drive. 
+
+Inside `executionController.js`, we used Node's native `child_process.spawn()` method:
+```javascript
+import { spawn } from "child_process";
+const child = spawn("python", [`temp/jobs/${uuid}.py`]);
+```
+
+### The Challenge: Asynchronous Streams
+When you spawn a process, it doesn't return the output immediately. It streams data over `stdout` (standard output) and `stderr` (standard error). We had to attach event listeners to capture the data chunks, convert the binary buffers to strings, and combine them before responding to the frontend.
+
+### The Cleanup
+We implemented a strict `finally` block to run `fs.unlink()` to delete the temporary file after execution, ensuring our host machine's hard drive wasn't permanently bloated by thousands of execution scripts.
+
+---
+
+## Phase 3: Enterprise Error Handling & Validation (Days 6–8)
+
+### The Goal
+APIs fail. Users submit garbage data. The server cannot crash when faced with bad inputs.
+
+### The Implementation
+We stripped out our repetitive `try/catch` logic and implemented a centralized, enterprise-grade error handling pattern.
+
+**1. The AppError Class**
+We extended the native JavaScript `Error` class to create `AppError`. This class attached an HTTP `statusCode` and an `isOperational` boolean to every error, allowing us to differentiate between a user making a typo (Operational) vs. our database crashing (Programming Error).
+
+**2. Global Error Middleware**
+We created `errorHandler.js` and mounted it as the *very last* middleware in `app.js`. If any controller throws an error, Express forwards it to this middleware, which formats a clean, standardized JSON response:
 ```json
-{
-  "output": "Hello world\n",
-  "executionTime": 142,
-  "jobId": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-  "createdAt": 1718420000000
+{ "status": "error", "message": "Invalid language supported" }
+```
+
+**3. Aggressive Validation**
+We built `validateExecution.js` to intercept requests. If the `code` is empty, or the `language` is not supported, we immediately throw an `AppError` before any files are created or processes spawned.
+
+---
+
+## Phase 4: Sandboxing & The Docker Migration (Days 9–10)
+
+### The Goal
+Executing arbitrary user code directly on the host machine via `spawn("python")` means a user could submit `import os; os.system("rm -rf /")`. We needed an impenetrable sandbox.
+
+### The Implementation
+We replaced our local execution with **Docker**. The backend was rewritten to spawn ephemeral `docker run` commands instead of direct language binaries. 
+
+To achieve maximum security, we passed a ruthless array of flags to the Docker daemon:
+```javascript
+const args = [
+  "run",
+  "--rm",               // Instantly delete container upon exit
+  "--cpus=0.5",         // Hard limit CPU usage to half a core
+  "--memory=128m",      // Hard limit RAM. Stops array-duplication memory bombs
+  "--network=none",     // Disable the virtual network card. No internet access!
+  "--read-only",        // Mount the entire container file system as read-only
+  "--tmpfs", "/tmp",    // Provide a small RAM-based scratchpad for Python
+  "-v", `${filePath}:/app/code.py`, // Bind mount our script into the sandbox
+  "code-runner-python",
+  "python",
+  "/app/code.py"
+];
+```
+
+### The Node.js Kill Switch
+Even with Docker limits, an infinite `while True:` loop would keep the container running forever. We introduced a JavaScript `setTimeout` inside our execution Promise that forcefully executes `child.kill()` if 5000ms passes without a resolution.
+
+---
+
+## Phase 5: Redis & The Distributed Queue (Days 11–12)
+
+### The Goal
+Docker is heavy. If 1,000 users submit code simultaneously, the Express API will crash trying to spawn 1,000 Docker containers synchronously. We needed to decouple the API from the Execution.
+
+### The Implementation
+We spun up a Redis in-memory data store. We installed `bullmq` (the premier Node.js queueing library) and `ioredis`. 
+
+We completely transformed our API into a **Producer**. 
+Inside `executionController.js`, instead of running Docker, the API now simply drops the raw code into the Redis `"code-execution"` queue and instantly returns an asynchronous `jobId` to the frontend.
+
+```javascript
+const job = await codeQueue.add("execute", { language, code });
+res.status(200).json({ success: true, jobId: job.id });
+```
+By returning instantly, our API can now ingest tens of thousands of requests per second without breaking a sweat.
+
+---
+
+## Phase 6: The Worker Service (Day 13)
+
+### The Goal
+With jobs piling up in Redis, we needed a Consumer to actually execute the code.
+
+### The Implementation
+We built an entirely separate, independent Node.js project inside the `worker/` directory. This is the **Muscle** of the distributed system.
+- We physically moved `dockerExecutor.js` out of the backend and into the worker.
+- We instantiated a BullMQ `Worker` instance that permanently listens to the `"code-execution"` queue.
+- When a job appears, the worker securely creates the temp file, runs the Docker sandbox, extracts the output, and updates Redis with the final result.
+
+Because the worker is a separate process, you can deploy it on a completely different physical server from the API. You can even run 10 workers at once, and BullMQ will intelligently distribute the jobs among them!
+
+---
+
+## Phase 7: Polling & Closing the Loop (Day 14)
+
+### The Goal
+Because the API returned instantly in Day 12, the frontend had no idea what the final code output was. We had to bridge the gap.
+
+### The Implementation
+We created a new endpoint: `GET /api/job/:id`. This endpoint allows the API to peer into BullMQ and ask for a specific job's state.
+
+In the React frontend, we implemented a sophisticated Polling mechanism using `useEffect` and `setInterval`. 
+When a user clicks "Run", the frontend receives the `jobId` and immediately begins pinging the API every **1000 milliseconds**.
+1. **Status: waiting** -> UI shows "Waiting in queue..."
+2. **Status: active** -> UI shows "Running in sandbox..."
+3. **Status: completed** -> React extracts the final `job.returnvalue`, populates the Output Panel with the Python logs, and kills the interval.
+
+The user perceives a seamless execution, entirely unaware of the complex distributed handoff occurring behind the scenes.
+
+---
+
+## Phase 8: Database Architecture & Prisma (Days 15–16)
+
+### The Goal
+Redis is volatile. If the server reboots, all job history is deleted. We need permanent persistence to build out user accounts, saved snippets, and analytics.
+
+### The Implementation
+We spun up a **PostgreSQL** database container and installed the **Prisma ORM (v6.4.1)**. 
+We designed a robust `Job` schema to permanently log every interaction:
+```prisma
+model Job {
+  id            String   @id @default(uuid())
+  language      String
+  code          String
+  status        String   // waiting, active, completed, failed
+  output        String?
+  error         String?
+  executionTime Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 ```
 
-The frontend `OutputPanel` was updated to seamlessly catch this `executionTime` parameter and neatly render it (e.g. `Execution time: 142ms`) right beside the terminal title.
+### The Database-First Paradigm
+To guarantee we never lose a job, we altered the submission lifecycle in Day 16. 
+When code hits the `executionController`, the API now writes a record to PostgreSQL *first*, with `status: "waiting"`. 
 
-## The Cleanup Engine
+To prevent ID conflicts, we extract the permanent PostgreSQL UUID and force BullMQ to adopt it as the Redis Job ID:
+```javascript
+await codeQueue.add("execute", { language, code }, { jobId: dbJob.id });
+```
+This ensures perfect traceability. A single UUID tracks the code from the React UI -> Express API -> PostgreSQL Database -> Redis Queue -> Node Worker -> Docker Sandbox.
 
-The biggest vulnerability in Day 4 was that server crashes or dangling execution promises would leave files permanently trapped on the disk.
+---
 
-### The Garbage Collector (`cleanupService.js`)
-I built an automated background service that scans the `jobs` directory, compares the file creation timestamps (`birthtimeMs`) to the current server time, and aggressively `unlink`s any file older than **5 minutes**.
-
-### Background Daemon
-In `server.js`, I hooked the cleanup service into a non-blocking `setInterval` daemon. It fires quietly every 300,000 milliseconds (5 minutes). You no longer need to worry about disk-space creeping up over a few weeks of usage.
-
-Your backend will now cleanly manage memory and disk I/O under load!
+### What's Next?
+As of Day 16, the system successfully persists the job in PostgreSQL upon submission. However, the Worker Service currently only updates the volatile Redis queue when it finishes executing. The next critical step (Day 17) is instructing the Worker Service to push its final execution output back into PostgreSQL to finalize the permanent record!
