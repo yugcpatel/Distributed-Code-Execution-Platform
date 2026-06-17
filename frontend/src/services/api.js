@@ -14,9 +14,9 @@ export const executeCode = async (code, language) => {
       language
     });
     
-    // The backend now wraps successful responses in { success: true, data: { ... } }
-    // We return response.data.data to give the components exactly what they need
-    return response.data.data;
+    // The backend now responds instantly with { success: true, jobId: "..." }
+    // We return response.data to give the components the jobId
+    return response.data;
   } catch (error) {
     // If there is an error (like server is down), we print it to the console
     console.error('API execution error:', error);

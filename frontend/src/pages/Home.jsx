@@ -26,6 +26,7 @@ function Home() {
   const [output, setOutput] = useState('');
   const [executionTime, setExecutionTime] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [jobId, setJobId] = useState(null);
   
   const [showModal, setShowModal] = useState(false);
   const [pendingLanguage, setPendingLanguage] = useState(null);
@@ -64,8 +65,9 @@ function Home() {
     setExecutionTime(null);
     try {
       const result = await executeCode(code, language);
-      setOutput(result.output || result.message || 'Execution finished.');
-      setExecutionTime(result.executionTime);
+      setJobId(result.jobId);
+      setOutput(`Job submitted... (Job ID: ${result.jobId})`);
+      setExecutionTime(null);
     } catch (error) {
       setOutput(`Error: ${error.message}`);
     } finally {
