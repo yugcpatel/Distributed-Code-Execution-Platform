@@ -12,7 +12,7 @@ import ThemeSelector from '../components/ThemeSelector';
 import RunButton from '../components/RunButton';
 import OutputPanel from '../components/OutputPanel';
 import ConfirmModal from '../components/ConfirmModal';
-import { executeCode } from '../services/api';
+import { executeCode, getJobStatus } from '../services/api';
 
 // Define the default starter code for each language
 const DEFAULT_CODE = {
@@ -40,6 +40,48 @@ function Home() {
     document.documentElement.setAttribute('data-theme', appTheme);
   }, [appTheme]);
 
+  // Polling mechanism to check job status every 1000ms
+  useEffect(() => {
+    let intervalId;
+
+    if (jobId) {
+      intervalId = setInterval(async () => {
+        try {
+          const statusResult = await getJobStatus(jobId);
+          
+          if (statusResult.state === 'waiting') {
+            setOutput('Waiting in queue...');
+          } else if (statusResult.state === 'active') {
+            setOutput('Running in sandbox...');
+          } else if (statusResult.state === 'completed') {
+            // Success! The output is stored in result.output
+            setOutput(statusResult.result?.output || 'Execution finished (no output).');
+            setExecutionTime(statusResult.result?.executionTime);
+            setLoading(false);
+            clearInterval(intervalId);
+            setJobId(null); // Clear jobId to stop polling
+          } else if (statusResult.state === 'failed') {
+            // Failure in the worker process
+            setOutput(`Execution failed: ${statusResult.error}`);
+            setLoading(false);
+            clearInterval(intervalId);
+            setJobId(null);
+          }
+        } catch (err) {
+          setOutput(`Error checking status: ${err.message}`);
+          setLoading(false);
+          clearInterval(intervalId);
+          setJobId(null);
+        }
+      }, 1000); // 1-second interval as requested
+    }
+
+    // Cleanup function runs when component unmounts or jobId changes
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [jobId]);
+
   const handleLanguageChange = (newLanguage) => {
     const hasCustomCode = code !== DEFAULT_CODE[language] && code.trim() !== '';
     if (hasCustomCode) {
@@ -61,16 +103,14 @@ function Home() {
 
   const handleRun = async () => {
     setLoading(true);
-    setOutput('Running...');
+    setOutput('Submitting...');
     setExecutionTime(null);
     try {
       const result = await executeCode(code, language);
       setJobId(result.jobId);
-      setOutput(`Job submitted... (Job ID: ${result.jobId})`);
-      setExecutionTime(null);
+      // We DO NOT setLoading(false) here, because the polling loop takes over!
     } catch (error) {
       setOutput(`Error: ${error.message}`);
-    } finally {
       setLoading(false);
     }
   };

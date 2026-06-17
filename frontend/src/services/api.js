@@ -30,3 +30,17 @@ export const executeCode = async (code, language) => {
     throw error;
   }
 };
+
+// New function to poll the status of a submitted job
+export const getJobStatus = async (jobId) => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/job/${jobId}`);
+    return response.data;
+  } catch (error) {
+    console.error('API status fetch error:', error);
+    if (error.response && error.response.data && error.response.data.message) {
+      throw new Error(error.response.data.message);
+    }
+    throw error;
+  }
+};

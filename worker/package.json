@@ -1,0 +1,19 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "dependencies": {
+    "bullmq": "^5.78.1",
+    "dotenv": "^17.4.2",
+    "ioredis": "^5.11.1",
+    "uuid": "^14.0.0"
+  }
+}
