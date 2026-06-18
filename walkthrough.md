@@ -184,5 +184,37 @@ This ensures perfect traceability. A single UUID tracks the code from the React 
 
 ---
 
-### What's Next?
-As of Day 16, the system successfully persists the job in PostgreSQL upon submission. However, the Worker Service currently only updates the volatile Redis queue when it finishes executing. The next critical step (Day 17) is instructing the Worker Service to push its final execution output back into PostgreSQL to finalize the permanent record!
+## Phase 9: Closing the Database Loop (Day 17)
+
+### The Goal
+As of Phase 8, the API writes to PostgreSQL when a job is submitted (`status: "waiting"`), but the Worker Service only updates the volatile Redis queue when it finishes executing. We needed the Worker to physically reach into the PostgreSQL database and update the permanent record.
+
+### The Implementation
+Because the Worker is an entirely separate Node.js process, it required its own instance of the Prisma client. We installed `@prisma/client` inside the `worker/` directory, copied over the exact `schema.prisma`, and generated the client.
+
+Inside the Worker's `processJob` function, we completely wrapped the execution logic in a `try/catch` block heavily layered with database updates:
+
+**1. The `running` State**
+The instant the worker pulls the job from Redis, it updates the PostgreSQL database:
+```javascript
+await prisma.job.update({
+  where: { id: job.id },
+  data: { status: "running" }
+});
+```
+
+**2. The `completed` State**
+If Docker executes without Node-level errors, we calculate the execution duration and permanently save the output:
+```javascript
+const executionTime = Date.now() - startTime;
+await prisma.job.update({
+  where: { id: job.id },
+  data: { status: "completed", output: result.output, executionTime }
+});
+```
+
+**3. The `failed` State**
+If something goes catastrophically wrong (e.g., Docker daemon crashes, unhandled promise), the `catch` block intercepts it, updates the database to `"failed"`, logs the `error.message`, and critically **re-throws** the error so BullMQ can process its internal retry algorithms.
+
+### The Result
+The platform's persistence architecture is now completely rock-solid. A user can submit code, close their browser, and return a week later. Because the Worker Service is directly updating the PostgreSQL database with the final states and output, the job's exact execution history is perfectly preserved and globally accessible!

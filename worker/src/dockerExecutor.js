@@ -1,50 +1,38 @@
-import { spawn } from "child_process";
-import fs from "fs/promises";
-import path from "path";
-import { v4 as uuidv4 } from "uuid";
+import { spawn, exec } from "child_process";
+import { promisify } from "util";
 
-// We define our local temp directory for the worker
-const TEMP_DIR = path.resolve(process.cwd(), "temp");
+const execAsync = promisify(exec);
 
-// Ensure the temp directory exists
-const ensureTempDir = async () => {
+const WARM_CONTAINER_NAME = "code-runner-warm";
+
+// Called once when the worker boots up
+export const initWarmContainer = async () => {
+  console.log("Initializing ultra-fast warm container...");
   try {
-    await fs.mkdir(TEMP_DIR, { recursive: true });
-  } catch (err) {
-    if (err.code !== "EEXIST") throw err;
-  }
+    // Kill old one if exists
+    await execAsync(`docker rm -f ${WARM_CONTAINER_NAME}`);
+  } catch (err) {}
+
+  // Boot up a sleeping container in the background
+  await execAsync(`docker run -d --name ${WARM_CONTAINER_NAME} --cpus=0.5 --memory=128m --network=none code-runner-python sleep infinity`);
+  console.log("Warm container initialized!");
 };
 
 export const dockerExecutePython = async (code) => {
-  await ensureTempDir();
-
-  const jobId = uuidv4();
-  const fileName = `${jobId}.py`;
-  const absoluteFilePath = path.join(TEMP_DIR, fileName);
-
-  // 1. Create the temp file
-  await fs.writeFile(absoluteFilePath, code);
-
   const startTime = Date.now();
 
-  try {
-    // 2. Execute via Docker with strict limits
-    const args = [
-      "run",
-      "--rm",
-      "--cpus=0.5",
-      "--memory=128m",
-      "--network=none",
-      "--read-only",
-      "--tmpfs", "/tmp",
-      "-v",
-      `${absoluteFilePath.replace(/\\/g, '/')}:/app/code.py`,
-      "code-runner-python",
+  return new Promise((resolve) => {
+    // We execute code inside the already running warm container using stdin stream
+    // 'timeout 5' ensures infinite loops inside the container are killed
+    const child = spawn("docker", [
+      "exec",
+      "-i",
+      WARM_CONTAINER_NAME,
+      "timeout",
+      "5",
       "python",
-      "/app/code.py"
-    ];
-
-    const child = spawn("docker", args);
+      "-"
+    ]);
 
     let output = "";
     child.stdout.on("data", (data) => {
@@ -54,35 +42,20 @@ export const dockerExecutePython = async (code) => {
       output += data.toString();
     });
 
-    const result = await new Promise((resolve) => {
-      // Security: Hard timeout of 5 seconds to prevent infinite loops
-      const timeout = setTimeout(() => {
-        child.kill();
-        resolve({
-          output: "Execution timed out after 5 seconds",
-          executionTime: Date.now() - startTime,
-        });
-      }, 5000);
+    child.on("close", (exitCode) => {
+      if (exitCode === 124 || exitCode === 137) {
+        // 124 is timeout command exit code, 137 is OOM
+        output = output || "Execution timed out after 5 seconds";
+      }
 
-      child.on("close", (code) => {
-        clearTimeout(timeout);
-        if (code === 137) {
-           output = "Process exited with code 137 (OOM Killer)";
-        }
-        resolve({
-          output: output || `Process exited with code ${code}`,
-          executionTime: Date.now() - startTime,
-        });
+      resolve({
+        output: output || (exitCode !== 0 ? `Process exited with code ${exitCode}` : ""),
+        executionTime: Date.now() - startTime,
       });
     });
 
-    return result;
-  } finally {
-    // 3. Cleanup temp file regardless of success or failure
-    try {
-      await fs.unlink(absoluteFilePath);
-    } catch (err) {
-      console.error(`Failed to delete temp file ${absoluteFilePath}`, err);
-    }
-  }
+    // Pipe the user's python code directly into the container's python process
+    child.stdin.write(code);
+    child.stdin.end();
+  });
 };

@@ -73,7 +73,7 @@ function Home() {
           clearInterval(intervalId);
           setJobId(null);
         }
-      }, 1000); // 1-second interval as requested
+      }, 200); // 200ms interval for blazing fast updates
     }
 
     // Cleanup function runs when component unmounts or jobId changes
