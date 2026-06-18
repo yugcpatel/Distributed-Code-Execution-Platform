@@ -7,6 +7,7 @@ function OutputPanel({ output, executionTime, status }) {
     switch (status) {
       case 'waiting': return 'badge-waiting';
       case 'running': return 'badge-running';
+      case 'retrying': return 'badge-retrying';
       case 'completed': return 'badge-completed';
       case 'failed': return 'badge-failed';
       default: return 'badge-waiting';
@@ -36,7 +37,7 @@ function OutputPanel({ output, executionTime, status }) {
           {/* Status Badge */}
           {status !== 'idle' && (
             <div className={`badge ${getBadgeClass()}`}>
-              {status === 'running' && <div className="spinner" />}
+              {(status === 'running' || status === 'retrying') && <div className="spinner" />}
               {status === 'completed' && <CheckCircle2 size={12} />}
               {status === 'failed' && <AlertCircle size={12} />}
               {status}

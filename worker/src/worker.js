@@ -6,27 +6,33 @@ import prisma from "./config/prisma.js";
 // Initialize the ultra-fast warm container before taking jobs
 await initWarmContainer();
 
-console.log("Worker starting up... waiting for jobs on queue 'code-execution'");
+const workerId = process.pid;
+console.log(`Worker ${workerId} starting up... waiting for jobs on queue 'code-execution'`);
 
 const worker = new Worker(
   "code-execution",
   async (job) => {
-    console.log(`[Job ${job.id}] Picked up job`);
+    console.log(`[Worker ${workerId}] Picked up job ${job.id}`);
     const { language, code } = job.data;
 
     try {
-      // 1. Update status to RUNNING in the database
+      // 1. Update status to RUNNING in the database and increment attempts
       await prisma.job.update({
         where: { id: job.id },
-        data: { status: "running" }
+        data: { 
+          status: "running",
+          attempts: { increment: 1 }
+        }
       });
+
+      console.log(`[Worker ${workerId}] Job ${job.id} attempt ${job.attemptsMade + 1}`);
 
       // We only support Python at the moment, but we can expand later
       if (language !== "python") {
         throw new Error(`Unsupported language: ${language}`);
       }
 
-      console.log(`Job ${job.id} started`);
+      console.log(`[Worker ${workerId}] started job ${job.id}`);
       // 2. Track execution start time
       const startTime = Date.now();
 
@@ -47,32 +53,37 @@ const worker = new Worker(
         }
       });
 
-      console.log(`Job ${job.id} completed`);
+      console.log(`[Worker ${workerId}] completed job ${job.id}`);
       return result;
     } catch (error) {
-      console.log(`Job ${job.id} failed`);
+      console.log(`[Worker ${workerId}] failed job ${job.id} on attempt ${job.attemptsMade + 1}`);
       
-      // 5. Update status to FAILED in the database
+      const isFinalAttempt = job.attemptsMade + 1 >= job.opts.attempts;
+      
+      // 5. Update status to FAILED or RETRYING in the database
       await prisma.job.update({
         where: { id: job.id },
         data: {
-          status: "failed",
+          status: isFinalAttempt ? "failed" : "retrying",
           error: error.message
         }
       });
 
-      // 6. Re-throw the error so BullMQ knows it failed
+      // 6. Re-throw the error so BullMQ handles backoff and retries
       throw error;
     }
   },
-  { connection }
+  { 
+    connection,
+    concurrency: 2 
+  }
 );
 
 // Worker event listeners for logging
 worker.on("completed", (job, returnvalue) => {
-  console.log(`[Job ${job.id}] Completed successfully in ${returnvalue.executionTime}ms`);
+  console.log(`[Worker ${workerId}] Job ${job.id} Completed successfully in ${returnvalue.executionTime}ms`);
 });
 
 worker.on("failed", (job, err) => {
-  console.error(`[Job ${job.id}] Failed: ${err.message}`);
+  console.error(`[Worker ${workerId}] Job ${job.id} Failed: ${err.message}`);
 });

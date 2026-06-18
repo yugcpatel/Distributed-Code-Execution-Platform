@@ -21,7 +21,7 @@ export const initWarmContainer = async () => {
 export const dockerExecutePython = async (code) => {
   const startTime = Date.now();
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     // We execute code inside the already running warm container using stdin stream
     // 'timeout 5' ensures infinite loops inside the container are killed
     const child = spawn("docker", [
@@ -46,10 +46,16 @@ export const dockerExecutePython = async (code) => {
       if (exitCode === 124 || exitCode === 137) {
         // 124 is timeout command exit code, 137 is OOM
         output = output || "Execution timed out after 5 seconds";
+        return reject(new Error(output));
+      }
+
+      if (exitCode !== 0) {
+        // Any non-zero exit code (like python syntax error or runtime error) should trigger a retry
+        return reject(new Error(output || `Process exited with code ${exitCode}`));
       }
 
       resolve({
-        output: output || (exitCode !== 0 ? `Process exited with code ${exitCode}` : ""),
+        output: output,
         executionTime: Date.now() - startTime,
       });
     });

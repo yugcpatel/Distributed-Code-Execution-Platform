@@ -20,6 +20,7 @@ model Job {
   output        String?
   error         String?
   executionTime Int?
+  attempts      Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

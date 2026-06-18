@@ -54,6 +54,8 @@ function Home() {
             setOutput('Waiting in queue...');
           } else if (jobStatus === 'running') {
             setOutput('Running in sandbox...');
+          } else if (jobStatus === 'retrying') {
+            setOutput('Execution failed. Retrying...');
           } else if (jobStatus === 'completed') {
             setOutput(job?.output || 'Execution finished (no output).');
             setExecutionTime(job?.executionTime);

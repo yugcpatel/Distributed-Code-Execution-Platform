@@ -252,3 +252,39 @@ While the backend was an industrial-strength distributed system, the frontend re
 
 ### The Result
 The user interface is now incredibly premium, feeling akin to professional platforms like Replit or VSCode Web. The frontend is not just beautiful; it accurately visualizes the complex distributed states (Queueing, Executing, Formatting) happening seamlessly in the backend.
+
+---
+
+## Phase 12: Retry System + Failure Recovery (Day 19)
+
+### The Goal
+If a job failed (e.g. from a container timeout, out-of-memory crash, or python syntax error), it was instantly and permanently marked as `failed` after one attempt. For an enterprise-grade platform, we need resiliency. The goal was to configure BullMQ's exponential backoff retry mechanism and track these attempts perfectly inside our PostgreSQL database, so users could visually watch a job seamlessly retry before officially failing.
+
+### The Implementation
+1. **Database Tracking**: Added a new `attempts` integer column to the `Job` Prisma schema. We ran `prisma migrate dev` on the backend and `prisma generate` on the worker to sync both isolated environments.
+2. **BullMQ Backoff**: In the execution controller, we added the retry configuration to `codeQueue.add(...)`, explicitly setting `attempts: 3` and an exponential backoff starting at a `2000ms` delay.
+3. **Smart Worker Logic**: 
+   - We updated the worker to use Prisma's `increment: 1` command to reliably increment the database attempt count every time the worker picked up a job.
+   - We modified `dockerExecutePython` to intentionally `reject()` the promise for any non-zero exit codes.
+   - In the worker's `catch` block, we calculate whether `job.attemptsMade + 1 >= job.opts.attempts`. If true, the job is marked `failed`. If false, we flag it as `retrying` and gracefully throw the error back to BullMQ to queue the retry.
+4. **Frontend UI Sync**: Updated `Home.jsx` to recognize the new `retrying` state during the polling cycle, and added a yellow `.badge-retrying` indicator in `OutputPanel.jsx`.
+
+### The Result
+We now have an incredibly fault-tolerant platform! If you submit code that triggers a timeout or division-by-zero, the frontend will elegantly transition from `Waiting` → `Running` → `Retrying` → `Running` → `Retrying` → `Running` → `Failed`, with the final attempt count fully persisted in PostgreSQL!
+
+---
+
+## Phase 13: Multi-Worker Scaling + Load Testing (Day 20)
+
+### The Goal
+Up until now, the architecture relied on a single consumer process. While the queue buffered jobs effectively, a single worker creates a hard execution bottleneck. The goal was to prove the system's ability to seamlessly scale horizontally by spawning multiple worker processes to tackle jobs in parallel, fully utilizing the "competing consumers" model of BullMQ.
+
+### The Implementation
+1. **Worker Identity Verification**: We upgraded the worker script (`worker.js`) to capture its own operating system process ID (`const workerId = process.pid;`). This ID was injected into every log statement so we could definitively prove *which* worker was processing *which* job.
+2. **Concurrency Tuning**: We passed `{ concurrency: 2 }` into the BullMQ Worker constructor. This allows a *single* Node.js worker process to pull and execute up to 2 jobs simultaneously from the queue.
+3. **Horizontal Expansion**: Rather than running one worker terminal, we instructed the environment to spawn 3 separate terminals, all running `node src/worker.js`. 
+
+### The Result (Load Testing)
+With 3 workers running at `concurrency: 2`, our capacity skyrocketed from **1 execution at a time** to **6 parallel executions at a time**! 
+
+When flooding the system with heavy Python scripts (`import time; time.sleep(5)`), the frontend UI visualized a massive backlog of `Waiting` jobs. In the background, the 3 terminal processes perfectly distributed the load without any manual orchestration, burning down the queue in a fraction of the time. The platform is now legitimately distributed and infinitely scalable!
