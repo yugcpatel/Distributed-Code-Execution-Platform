@@ -1,26 +1,18 @@
 import React from 'react';
+import { Palette } from 'lucide-react';
 
 function ThemeSelector({ theme, onChange }) {
   return (
-    <div className="theme-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '15px' }}>
-      <label htmlFor="theme-select" style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Theme:</label>
+    <div className="theme-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <Palette size={16} color="var(--text-secondary)" />
       <select
         id="theme-select"
         value={theme}
         onChange={(e) => onChange(e.target.value)}
-        style={{
-          padding: '6px 12px',
-          borderRadius: '4px',
-          backgroundColor: 'var(--bg-tertiary)',
-          color: 'var(--text-primary)',
-          border: '1px solid var(--border-color)',
-          cursor: 'pointer',
-          outline: 'none',
-          fontFamily: 'inherit'
-        }}
+        className="select-modern"
       >
-        <option value="dark">Dark (Premium)</option>
-        <option value="light">Light</option>
+        <option value="dark">Dark Theme</option>
+        <option value="light">Light Theme</option>
         <option value="dracula">Dracula</option>
       </select>
     </div>

@@ -1,35 +1,35 @@
-import { codeQueue } from '../queue/codeQueue.js';
+import prisma from "../config/prisma.js";
 
 export const getJobStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    // Fetch the job from Redis via BullMQ
-    const job = await codeQueue.getJob(id);
+    // Fetch the job from PostgreSQL database instead of Redis
+    const job = await prisma.job.findUnique({
+      where: {
+        id: id
+      }
+    });
 
     if (!job) {
-      return res.status(404).json({ success: false, message: 'Job not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Job not found' 
+      });
     }
 
-    // BullMQ tracks exactly what stage the job is in
-    const state = await job.getState(); // waiting, active, completed, failed
-    
-    // We start building our response payload
-    const responsePayload = {
+    // Return the database fields exactly as they are stored
+    return res.status(200).json({
       success: true,
-      state,
-    };
-
-    // If it's done, we extract the result (output and execution time)
-    if (state === 'completed') {
-      responsePayload.result = job.returnvalue;
-    } 
-    // If it failed (e.g. Docker crashed, invalid syntax), we extract the error
-    else if (state === 'failed') {
-      responsePayload.error = job.failedReason;
-    }
-
-    res.status(200).json(responsePayload);
+      job: {
+        id: job.id,
+        status: job.status,
+        output: job.output,
+        error: job.error,
+        executionTime: job.executionTime,
+        createdAt: job.createdAt
+      }
+    });
 
   } catch (error) {
     next(error);

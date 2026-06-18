@@ -1,9 +1,9 @@
 // Import React and hooks
 import React, { useState, useEffect } from 'react';
-// Import the resizable panel library (latest version uses Group and Separator)
+// Import the resizable panel library
 import { Panel, Group, Separator } from 'react-resizable-panels';
-// Import icons for our layout toggle buttons
-import { Columns, Rows } from 'lucide-react';
+// Import icons
+import { Columns, Rows, Code2, Play } from 'lucide-react';
 
 // Import our custom components
 import CodeEditor from '../components/CodeEditor';
@@ -27,20 +27,18 @@ function Home() {
   const [executionTime, setExecutionTime] = useState(null);
   const [loading, setLoading] = useState(false);
   const [jobId, setJobId] = useState(null);
+  const [status, setStatus] = useState('idle'); // idle, waiting, running, completed, failed
   
   const [showModal, setShowModal] = useState(false);
   const [pendingLanguage, setPendingLanguage] = useState(null);
 
-  // New state variables for customizable UI
-  const [layout, setLayout] = useState('horizontal'); // 'horizontal' (side-by-side) or 'vertical' (top-down)
-  const [appTheme, setAppTheme] = useState('dark');   // 'dark', 'light', 'dracula'
+  const [layout, setLayout] = useState('horizontal');
+  const [appTheme, setAppTheme] = useState('dark');
 
-  // When the theme changes, update the body attribute so CSS variables change instantly
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', appTheme);
   }, [appTheme]);
 
-  // Polling mechanism to check job status every 1000ms
   useEffect(() => {
     let intervalId;
 
@@ -48,35 +46,36 @@ function Home() {
       intervalId = setInterval(async () => {
         try {
           const statusResult = await getJobStatus(jobId);
+          const job = statusResult.job;
+          const jobStatus = job?.status || 'failed';
+          setStatus(jobStatus);
           
-          if (statusResult.state === 'waiting') {
+          if (jobStatus === 'waiting') {
             setOutput('Waiting in queue...');
-          } else if (statusResult.state === 'active') {
+          } else if (jobStatus === 'running') {
             setOutput('Running in sandbox...');
-          } else if (statusResult.state === 'completed') {
-            // Success! The output is stored in result.output
-            setOutput(statusResult.result?.output || 'Execution finished (no output).');
-            setExecutionTime(statusResult.result?.executionTime);
+          } else if (jobStatus === 'completed') {
+            setOutput(job?.output || 'Execution finished (no output).');
+            setExecutionTime(job?.executionTime);
             setLoading(false);
             clearInterval(intervalId);
-            setJobId(null); // Clear jobId to stop polling
-          } else if (statusResult.state === 'failed') {
-            // Failure in the worker process
-            setOutput(`Execution failed: ${statusResult.error}`);
+            setJobId(null);
+          } else if (jobStatus === 'failed') {
+            setOutput(`Execution failed:\n${job?.error || 'Unknown error occurred.'}`);
             setLoading(false);
             clearInterval(intervalId);
             setJobId(null);
           }
         } catch (err) {
+          setStatus('failed');
           setOutput(`Error checking status: ${err.message}`);
           setLoading(false);
           clearInterval(intervalId);
           setJobId(null);
         }
-      }, 200); // 200ms interval for blazing fast updates
+      }, 200);
     }
 
-    // Cleanup function runs when component unmounts or jobId changes
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
@@ -103,63 +102,69 @@ function Home() {
 
   const handleRun = async () => {
     setLoading(true);
+    setStatus('waiting');
     setOutput('Submitting...');
     setExecutionTime(null);
     try {
       const result = await executeCode(code, language);
       setJobId(result.jobId);
-      // We DO NOT setLoading(false) here, because the polling loop takes over!
     } catch (error) {
+      setStatus('failed');
       setOutput(`Error: ${error.message}`);
       setLoading(false);
     }
   };
 
   return (
-    <div className="home-page" style={{ padding: '20px', width: '100%', margin: '0 auto', height: '100vh', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <div className="app-container" style={{ padding: '24px', gap: '20px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       
-      {/* Combined Top Bar: Logo, Language, Run, Theme, Layout */}
-      <header className="top-bar" style={{ 
+      {/* Premium Glassmorphism Header */}
+      <header className="glass-panel" style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginBottom: '20px',
-        backgroundColor: 'var(--panel-bg)',
-        padding: '12px 24px',
-        borderRadius: '8px',
-        border: '1px solid var(--border-color)',
-        boxShadow: 'var(--shadow-glow, var(--shadow-sm))'
+        padding: '16px 24px',
+        borderRadius: 'var(--radius-md)'
       }}>
         {/* Left Side: Logo */}
-        <h1 style={{ margin: 0, fontSize: '24px', color: 'var(--accent-primary)', fontWeight: 'bold', letterSpacing: '0.5px' }}>SandBox</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ padding: '8px', background: 'var(--accent-primary)', borderRadius: '8px', color: 'white', display: 'flex' }}>
+            <Code2 size={24} />
+          </div>
+          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '700', letterSpacing: '-0.5px' }}>
+            SandBox
+          </h1>
+        </div>
         
         {/* Center/Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
           
           {/* Action Group: Language and Run */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <LanguageSelector language={language} onChange={handleLanguageChange} />
             <RunButton onClick={handleRun} loading={loading} />
           </div>
 
           {/* Divider */}
-          <div style={{ width: '1px', height: '30px', backgroundColor: 'var(--border-color)' }}></div>
+          <div style={{ width: '1px', height: '32px', backgroundColor: 'var(--border-color)' }}></div>
 
           {/* UI Controls Group: Theme and Orientation */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <ThemeSelector theme={appTheme} onChange={setAppTheme} />
             
-            <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: '6px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
               <button 
                 onClick={() => setLayout('horizontal')}
-                style={{ padding: '6px', backgroundColor: layout === 'horizontal' ? 'var(--bg-tertiary)' : 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}
+                className={`btn-icon ${layout === 'horizontal' ? 'active' : ''}`}
+                style={{ borderRadius: 0, borderRight: '1px solid var(--border-color)' }}
                 title="Side by Side"
               >
                 <Columns size={18} />
               </button>
               <button 
                 onClick={() => setLayout('vertical')}
-                style={{ padding: '6px', backgroundColor: layout === 'vertical' ? 'var(--bg-tertiary)' : 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}
+                className={`btn-icon ${layout === 'vertical' ? 'active' : ''}`}
+                style={{ borderRadius: 0 }}
                 title="Top and Bottom"
               >
                 <Rows size={18} />
@@ -170,12 +175,21 @@ function Home() {
       </header>
 
       {/* Resizable Workspace Area */}
-      <div style={{ flex: 1, minHeight: 0, border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', boxShadow: 'var(--shadow-glow, none)' }}>
+      <div className="glass-panel" style={{ flex: 1, minHeight: 0, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
         <Group orientation={layout}>
           
           {/* Editor Panel */}
           <Panel defaultSize={50} minSize={20}>
-            <CodeEditor code={code} onChange={setCode} language={language} appTheme={appTheme} />
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', background: 'rgba(0,0,0,0.1)' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {language === 'python' ? 'main.py' : 'index.js'}
+                </span>
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <CodeEditor code={code} onChange={setCode} language={language} appTheme={appTheme} />
+              </div>
+            </div>
           </Panel>
 
           {/* Draggable Divider */}
@@ -183,8 +197,8 @@ function Home() {
 
           {/* Output Panel */}
           <Panel defaultSize={50} minSize={20}>
-            <div style={{ height: '100%', backgroundColor: 'var(--panel-bg)' }}>
-              <OutputPanel output={output} executionTime={executionTime} />
+            <div style={{ height: '100%', backgroundColor: 'var(--bg-primary)' }}>
+              <OutputPanel output={output} executionTime={executionTime} status={status} />
             </div>
           </Panel>
           
@@ -201,5 +215,4 @@ function Home() {
   );
 }
 
-// Export the Home component to be used in App.jsx
 export default Home;
