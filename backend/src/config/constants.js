@@ -8,7 +8,7 @@ export const EXECUTION = {
   TIMEOUT_MS: 5000,
   
   // List of programming languages currently supported by the engine
-  ALLOWED_LANGUAGES: ['python']
+  ALLOWED_LANGUAGES: ['python', 'cpp']
 };
 
 export const CLEANUP = {

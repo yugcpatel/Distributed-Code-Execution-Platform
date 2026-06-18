@@ -1,7 +1,7 @@
 import React from 'react';
 import { Terminal, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 
-function OutputPanel({ output, executionTime, status }) {
+function OutputPanel({ output, executionTime, status, language }) {
   // Determine badge class based on status
   const getBadgeClass = () => {
     switch (status) {
@@ -12,6 +12,12 @@ function OutputPanel({ output, executionTime, status }) {
       case 'failed': return 'badge-failed';
       default: return 'badge-waiting';
     }
+  };
+
+  const getMockCommand = () => {
+    if (language === 'cpp') return 'g++ main.cpp && ./a.out';
+    if (language === 'javascript') return 'node main.js';
+    return 'python main.py';
   };
 
   return (
@@ -64,7 +70,7 @@ function OutputPanel({ output, executionTime, status }) {
         {/* Terminal Prompt Line */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-muted)' }}>
           <span style={{ color: 'var(--accent-success)' }}>$</span>
-          <span>python main.py</span>
+          <span>{getMockCommand()}</span>
         </div>
 
         <pre style={{ 

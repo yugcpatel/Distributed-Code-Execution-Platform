@@ -1,4 +1,4 @@
-import prisma from './src/config/prisma.js';
+import prisma from '../backend/src/config/prisma.js';
 
 const submitAndCheck = async (label, code) => {
   console.log(`\n--- Testing: ${label} ---`);

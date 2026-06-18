@@ -17,7 +17,8 @@ import { executeCode, getJobStatus } from '../services/api';
 // Define the default starter code for each language
 const DEFAULT_CODE = {
   javascript: '// Write your JavaScript code here\nconsole.log("Hello from SandBox!");',
-  python: '# Write your Python code here\nprint("Hello from SandBox!")'
+  python: '# Write your Python code here\nprint("Hello from SandBox!")',
+  cpp: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello from SandBox!" << endl;\n    return 0;\n}'
 };
 
 function Home() {
@@ -200,8 +201,12 @@ function Home() {
           {/* Output Panel */}
           <Panel defaultSize={50} minSize={20}>
             <div style={{ height: '100%', backgroundColor: 'var(--bg-primary)' }}>
-              <OutputPanel output={output} executionTime={executionTime} status={status} />
-            </div>
+                <OutputPanel 
+                  output={output} 
+                  executionTime={executionTime} 
+                  status={status}
+                  language={language}
+                /></div>
           </Panel>
           
         </Group>

@@ -1,10 +1,12 @@
 import { Worker } from "bullmq";
 import connection from "./redisConnection.js";
-import { dockerExecutePython, initWarmContainer } from "./dockerExecutor.js";
+import { dockerExecutePython, initWarmContainer } from "./executors/pythonExecutor.js";
+import { dockerExecuteCpp, initCppWarmContainer } from "./executors/cppExecutor.js";
 import prisma from "./config/prisma.js";
 
-// Initialize the ultra-fast warm container before taking jobs
+// Initialize the ultra-fast warm containers before taking jobs
 await initWarmContainer();
+await initCppWarmContainer();
 
 const workerId = process.pid;
 console.log(`Worker ${workerId} starting up... waiting for jobs on queue 'code-execution'`);
@@ -27,23 +29,29 @@ const worker = new Worker(
 
       console.log(`[Worker ${workerId}] Job ${job.id} attempt ${job.attemptsMade + 1}`);
 
-      // We only support Python at the moment, but we can expand later
-      if (language !== "python") {
-        throw new Error(`Unsupported language: ${language}`);
-      }
-
-      console.log(`[Worker ${workerId}] started job ${job.id}`);
+      console.log(`[Worker ${workerId}] started job ${job.id} [${language}]`);
       // 2. Track execution start time
       const startTime = Date.now();
 
-      // Hand off the code to our secure Docker executor
-      const result = await dockerExecutePython(code);
+      let result;
 
-      // 3. Track execution end time
+      // 3. Language Dispatcher
+      switch (language) {
+        case "python":
+          result = await dockerExecutePython(code);
+          break;
+        case "cpp":
+          result = await dockerExecuteCpp(code);
+          break;
+        default:
+          throw new Error(`Unsupported language: ${language}`);
+      }
+
+      // 4. Track execution end time
       const endTime = Date.now();
       const executionTime = endTime - startTime;
 
-      // 4. Update status to COMPLETED in the database
+      // 5. Update status to COMPLETED in the database
       await prisma.job.update({
         where: { id: job.id },
         data: {

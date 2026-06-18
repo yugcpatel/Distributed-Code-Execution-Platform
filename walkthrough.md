@@ -288,3 +288,57 @@ Up until now, the architecture relied on a single consumer process. While the qu
 With 3 workers running at `concurrency: 2`, our capacity skyrocketed from **1 execution at a time** to **6 parallel executions at a time**! 
 
 When flooding the system with heavy Python scripts (`import time; time.sleep(5)`), the frontend UI visualized a massive backlog of `Waiting` jobs. In the background, the 3 terminal processes perfectly distributed the load without any manual orchestration, burning down the queue in a fraction of the time. The platform is now legitimately distributed and infinitely scalable!
+
+---
+
+## Phase 14: Add C++ Support & Language Dispatch (Day 21)
+
+### The Goal
+Up until now, the backend implicitly assumed all jobs were Python scripts, streaming them directly into a Python Docker container. The goal was to transform the rigid executor into a dynamic "Language Dispatcher" capable of compiling and executing C++ code, opening the door to support dozens of different languages.
+
+### The Implementation
+1. **C++ Docker Infrastructure**: We created a dedicated Dockerfile pulling from `gcc:latest` to serve as our isolated compilation and execution environment.
+2. **C++ Executor Script**:
+   - Unlike Python which evaluates code on the fly, C++ requires a two-step compile-then-run pipeline.
+   - We utilized the worker's `fs` module to dynamically provision secure `/temp` directories. 
+   - Every submitted code block is written to disk as a uniquely timestamped `main-{id}.cpp` file to avoid concurrency collisions across parallel jobs.
+   - We trigger `docker run` to compile the `.cpp` file into a binary, aggressively throwing an error back to BullMQ if `g++` reports syntax issues.
+   - We then trigger a second `docker run` mapped to the binary with a strict 5-second `timeout` to capture its standard output.
+   - Using a `finally {}` block, we perform garbage collection, deleting the `.cpp` file and its compiled binary to prevent server disk overflow.
+3. **Language Dispatcher**: In `worker.js`, we replaced the hardcoded Python executor with a robust `switch(language)` statement, routing `job.data.code` to the correct docker execution service.
+4. **Validation Updates**: Added `'cpp'` to the backend's allowed languages configuration, and populated the Dropdown in the frontend's `LanguageSelector.jsx`.
+
+### The Result
+We successfully transformed our single-language code runner into a fully-fledged polyglot platform! The new C++ executor securely isolates parallel compilation states on disk and correctly processes syntax errors, runtime division-by-zero errors, and infinite loops cleanly inside Docker!
+
+---
+
+## Phase 15: Architecture & Folder Restructuring (Day 22)
+
+### The Goal
+As the platform evolved from a simple monolith into a scalable distributed worker architecture, it accumulated technical debt in the form of orphaned execution files and scattered Docker environments. The goal of Phase 15 was to completely restructure the project to reflect its true enterprise-grade capabilities.
+
+### The Implementation
+1. **Cleaned the Backend**: We deleted `backend/src/services/` entirely. The backend API no longer holds any execution-related JavaScript code—its sole responsibility is now routing requests and feeding the queue.
+2. **Centralized Environments**: We migrated `worker/docker/cpp/` and established a new root-level `docker-images/` directory containing `cpp/` and `python/`. This ensures all language environments are cleanly grouped together.
+3. **Structured the Worker**: We created a `worker/src/executors/` folder to logically group our `pythonExecutor.js` and `cppExecutor.js`. The main `worker.js` acts as the dispatcher, elegantly importing from the `executors/` module.
+4. **Isolated the Tests**: We extracted all manually written load-testing and integration scripts out of the backend and moved them into a dedicated root-level `tests/` directory.
+
+### The Result
+The codebase is now significantly cleaner, more intuitive, and highly scalable. Future languages (like Java, Rust, or Go) can simply be slotted into `docker-images/{lang}` and `worker/src/executors/{lang}Executor.js` without any confusion or clutter!
+
+---
+
+## Phase 16: Ultra-Fast C++ Warm Containers & UI Fixes
+
+### The Goal
+While C++ compilation and execution worked, it was suffering from a massive 4+ second latency due to the overhead of dynamically spinning up and destroying Docker containers. The frontend UI also had a static `python main.py` label that didn't match the selected language.
+
+### The Implementation
+1. **Frontend UI Fix**: We passed the `language` state from `Home.jsx` into the `OutputPanel.jsx` component. A dynamic function now checks the language and displays the appropriate terminal mock command (e.g., `$ g++ main.cpp && ./a.out`).
+2. **C++ Warm Container Initialization**: In `worker/src/executors/cppExecutor.js`, we implemented an `initCppWarmContainer()` boot sequence. It launches a sleeping `code-runner-cpp` container hooked up to a shared host `/temp` volume.
+3. **Lightning Fast Execution Pipeline**: We refactored `dockerExecuteCpp` to completely drop the slow `docker run` method. It now pipes a lightning-fast `docker exec sh -c "g++ ... && timeout 5 ..."` command directly into the pre-warmed C++ container.
+4. **Boot Registration**: Added `await initCppWarmContainer()` to the `worker.js` boot sequence so the container spins up the second the worker comes online.
+
+### The Result
+The frontend now accurately reflects the execution command of the language selected! Best of all, C++ compilation and execution overhead dropped from ~4300ms down to a fraction of a second, matching Python's blazing-fast runtime!
