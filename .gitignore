@@ -29,6 +29,7 @@ yarn-error.log*
 temp/
 backend/temp/
 worker/temp/
+tests/
 
 # Artifacts
 walkthrough.md
